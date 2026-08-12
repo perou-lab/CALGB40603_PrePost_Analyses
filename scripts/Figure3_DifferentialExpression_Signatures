@@ -16,9 +16,8 @@
 #   ("RNAID_Pre") signature scores.
 #
 #   The script writes a tab-delimited file that must be manually reformatted
-#   in Excel (see instructions below) before running SAM. runSAM() is assumed
-#   to be a locally defined helper (not part of this script) that launches
-#   the SAM Excel Add-in / macro on the prepared file.
+#   in Excel (see instructions below) before running SAM. runSAM() is part of
+#   the samr package. 
 #
 # Input data:
 #   mini.meta: clinical/molecular metadata data frame. Required columns:
@@ -104,6 +103,6 @@ write.table(
 #      operates on an open Excel worksheet, not the original .txt file.
 #
 # Once the Excel worksheet is prepared, proceed to:
-
+library(samr)
 runSAM()
 
