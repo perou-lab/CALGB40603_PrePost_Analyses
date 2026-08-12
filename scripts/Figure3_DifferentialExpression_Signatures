@@ -1,0 +1,109 @@
+#!/usr/bin/env Rscript
+# =================================================================================================
+# Figure 3 (Signatures):  SAM Input Preparation — Basal-Basal (N = 21) vs. Basal-NonBasal (N = 102)
+# =================================================================================================
+#
+# Description:
+#   This script prepares a SAM (Significance Analysis of Microarrays) input
+#   file comparing pretreatment gene signature/module scores between two
+#   groups of patients whose tumors were classified as PAM50 Basal at
+#   baseline:
+#     - Class 2, "BasalBasal"    : remained Basal subtype after treatment
+#     - Class 1, "BasalNonBasal" : switched to a different PAM50 subtype
+#                                  after treatment
+#   Both groups are restricted to patients with a paired post-treatment
+#   sample available. The comparison uses each patient's pre-treatment
+#   ("RNAID_Pre") signature scores.
+#
+#   The script writes a tab-delimited file that must be manually reformatted
+#   in Excel (see instructions below) before running SAM. runSAM() is assumed
+#   to be a locally defined helper (not part of this script) that launches
+#   the SAM Excel Add-in / macro on the prepared file.
+#
+# Input data:
+#   mini.meta: clinical/molecular metadata data frame. Required columns:
+#                 RNAID_Pre               - RNA-seq sample ID, pre-treatment
+#                 RNAID_Post              - RNA-seq sample ID, post-treatment ("." if unavailable)
+#                 PAM50_Pre_with_Clow     - PAM50 subtype, pre-treatment
+#                 PAM50_Post_with_Clow    - PAM50 subtype, post-treatment
+#
+#   module.results.published :  matrix/data frame of gene signature (module)
+#                               scores, with signatures as rows and sample IDs
+#                               (matching RNAID_Pre) as column names.
+#
+#   Gene expression data and clinical metadata are available through dbGaP
+#   under accession phs003801.
+#
+# Output:
+#   Modules_Published_BasalBasal_vs_BasalNonBasal.txt: tab-delimited signature
+#     score matrix with sample columns labeled by SAM class (1 = BasalNonBasal,
+#     2 = BasalBasal), written to:
+#     ./Output/File/Path/
+#
+# ==============================================================================
+
+# ---- 1. Define the comparison groups ------------------------------------------
+basalbasal <- mini.meta$RNAID_Pre[
+  !(mini.meta$RNAID_Post %in% ".") &
+    mini.meta$PAM50_Pre_with_Clow %in% "Basal" &
+    mini.meta$PAM50_Post_with_Clow %in% "Basal"
+]
+
+basalnonbasal <- mini.meta$RNAID_Pre[
+  !(mini.meta$RNAID_Post %in% ".") &
+    mini.meta$PAM50_Pre_with_Clow %in% "Basal" &
+    !(mini.meta$PAM50_Post_with_Clow %in% "Basal")
+]
+
+# ---- 2. Subset signature scores to the comparison groups ----------------------
+module.results.published.sam <- module.results.published[
+  , colnames(module.results.published) %in% c(basalbasal, basalnonbasal)
+]
+
+# ---- 3. Relabel sample columns with their SAM class -----------------------------
+# SAM (two-class, unpaired) expects numeric class labels: 1 = BasalNonBasal
+# (reference), 2 = BasalBasal.
+colnames(module.results.published.sam) <- ifelse(
+  colnames(module.results.published.sam) %in% basalbasal, 2, 1
+)
+
+# ---- 4. Write the SAM input file ------------------------------------------------
+write.table(
+  module.results.published.sam,
+  "./Output/File/Path/file.txt",
+  sep = "\t", col.names = NA
+)
+
+# ==============================================================================
+# Required Excel modifications before running SAM
+# (per the official SAM "Significance Analysis of Microarrays" User Guide,
+#  Stanford: http://www-stat.stanford.edu/~tibs/SAM)
+# ==============================================================================
+#
+# The file written above has ONE identifier column (signature name, from
+# write.table(col.names = NA)) followed directly by the sample columns. SAM's
+# required layout has TWO identifier columns before the data begins:
+#
+#   Column A  = Gene/Signature Name
+#   Column B  = Gene/Signature ID
+#   Column C+ = expression (here, signature score) values, one column per
+#               sample, with Row 1 containing the numeric class label
+#               (1 or 2) for that sample
+#   Row 1     = response/class labels, starting at COLUMN C
+#   Row 2+    = one row per signature, with the score values as plain numbers
+#
+# Steps to take in Excel after opening the .txt file:
+#   1. Open the file in Excel (it will import as tab-delimited).
+#   2. Insert a new column B, and copy column A (signature names) into it, so
+#      there are two identifier columns (A: name, B: ID) before the sample data.
+#      This shifts all sample columns from starting at column B to column C.
+#   3. Confirm that Row 1 of the sample columns (C onward) contains only the 
+#      numeric class labels 1 or 2 — not any other header text.
+#   4. Confirm all signature score values are stored as numbers, not text.
+#   5. Save the file as an Excel workbook (.xls/.xlsx) — SAM's Excel Add-in
+#      operates on an open Excel worksheet, not the original .txt file.
+#
+# Once the Excel worksheet is prepared, proceed to:
+
+runSAM()
+
